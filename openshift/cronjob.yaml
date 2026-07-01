@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ping-pong-daily-clear
+  labels:
+    app: ping-pong
+spec:
+  schedule: "0 21 * * *"
+  timeZone: "America/New_York"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: clear
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              command:
+                - /bin/sh
+                - -c
+                - "curl -s -X POST http://ping-pong.pk-individual.svc:8080/api/clear"

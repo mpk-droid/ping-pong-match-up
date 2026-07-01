@@ -1,7 +1,9 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const Database = require('better-sqlite3');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -41,38 +43,46 @@ for (let h = 9; h < 18; h++) {
   SLOTS.push(`${String(h).padStart(2, '0')}:30`);
 }
 
-let store = createEmptyStore();
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'pingpong.db');
+const dbDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
-function createEmptyStore() {
-  const slots = {};
-  for (const s of SLOTS) slots[s] = [];
-  return { date: todayStr(), slots };
-}
+const db = new Database(DB_PATH);
+db.pragma('journal_mode = WAL');
+db.exec(`CREATE TABLE IF NOT EXISTS entries (
+  date TEXT NOT NULL,
+  slot TEXT NOT NULL,
+  name TEXT NOT NULL,
+  PRIMARY KEY (date, slot, name)
+)`);
+
+const stmts = {
+  insert: db.prepare('INSERT OR IGNORE INTO entries (date, slot, name) VALUES (?, ?, ?)'),
+  remove: db.prepare('DELETE FROM entries WHERE date = ? AND slot = ? AND name = ?'),
+  exists: db.prepare('SELECT 1 FROM entries WHERE date = ? AND slot = ? AND name = ?'),
+  loadDay: db.prepare('SELECT slot, name FROM entries WHERE date = ?'),
+  clearOld: db.prepare('DELETE FROM entries WHERE date != ?'),
+  clearAll: db.prepare('DELETE FROM entries'),
+};
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function ensureToday() {
-  if (store.date !== todayStr()) {
-    store = createEmptyStore();
+function loadSlots() {
+  const slots = {};
+  for (const s of SLOTS) slots[s] = [];
+  const rows = stmts.loadDay.all(todayStr());
+  for (const row of rows) {
+    if (slots[row.slot]) slots[row.slot].push(row.name);
   }
+  return slots;
 }
 
-// Clear at 5 PM every day
-function scheduleDailyClear() {
-  const now = new Date();
-  const fivePM = new Date(now);
-  fivePM.setHours(17, 0, 0, 0);
-  if (fivePM <= now) fivePM.setDate(fivePM.getDate() + 1);
-  const ms = fivePM - now;
-  setTimeout(() => {
-    store = createEmptyStore();
-    broadcast();
-    scheduleDailyClear();
-  }, ms);
+function ensureToday() {
+  stmts.clearOld.run(todayStr());
 }
-scheduleDailyClear();
+
 
 // SSE
 const MAX_SSE_CLIENTS = 100;
@@ -84,7 +94,7 @@ function getClientIp(req) {
 }
 
 function broadcast() {
-  const data = JSON.stringify(store.slots);
+  const data = JSON.stringify(loadSlots());
   for (const res of clients) {
     res.write(`data: ${data}\n\n`);
   }
@@ -109,7 +119,7 @@ app.get('/api/events', (req, res) => {
   res.flushHeaders();
 
   ensureToday();
-  res.write(`data: ${JSON.stringify(store.slots)}\n\n`);
+  res.write(`data: ${JSON.stringify(loadSlots())}\n\n`);
 
   res._sseIp = ip;
   clients.push(res);
@@ -121,7 +131,7 @@ app.get('/api/events', (req, res) => {
 
 app.get('/api/today', (_req, res) => {
   ensureToday();
-  res.json(store.slots);
+  res.json(loadSlots());
 });
 
 const MAX_NAMES_PER_SLOT = 20;
@@ -137,17 +147,24 @@ app.post('/api/toggle', (req, res) => {
 
   ensureToday();
 
-  const arr = store.slots[slot];
-  const idx = arr.indexOf(sanitized);
-  if (idx === -1) {
-    if (arr.length >= MAX_NAMES_PER_SLOT) {
+  const today = todayStr();
+  const exists = stmts.exists.get(today, slot, sanitized);
+  if (exists) {
+    stmts.remove.run(today, slot, sanitized);
+  } else {
+    const currentSlot = loadSlots()[slot] || [];
+    if (currentSlot.length >= MAX_NAMES_PER_SLOT) {
       return res.status(409).json({ error: 'Slot is full' });
     }
-    arr.push(sanitized);
-  } else {
-    arr.splice(idx, 1);
+    stmts.insert.run(today, slot, sanitized);
   }
 
+  broadcast();
+  res.json({ ok: true });
+});
+
+app.post('/api/clear', (req, res) => {
+  stmts.clearAll.run();
   broadcast();
   res.json({ ok: true });
 });
@@ -155,3 +172,6 @@ app.post('/api/toggle', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Ping pong board running on http://localhost:${PORT}`);
 });
+
+process.on('SIGTERM', () => { db.close(); process.exit(0); });
+process.on('SIGINT', () => { db.close(); process.exit(0); });

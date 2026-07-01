@@ -152,6 +152,7 @@ app.post('/api/toggle', (req, res) => {
   if (!sanitized) return res.status(400).json({ error: 'Name is empty' });
 
   ensureToday();
+  stmts.registerUser.run(sanitized, todayStr());
 
   const today = todayStr();
   const exists = stmts.exists.get(today, slot, sanitized);

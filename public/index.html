@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ping Pong</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="header-left">
+        <p class="date" id="date"></p>
+      </div>
+      <div class="header-center">
+        <h1>🏓 Ping Pong (RH - Boston)</h1>
+        <p class="hint">Tap a slot to mark yourself available (tap again to clear selection)</p>
+      </div>
+      <div class="header-right" id="name-bar">
+        <button id="rename-btn" class="link-btn">change</button>
+        <span class="profile-name" id="display-name"></span>
+        <span class="profile-avatar" id="avatar"></span>
+      </div>
+    </header>
+
+    <div id="name-prompt" class="modal" hidden>
+      <div class="modal-box">
+        <h2>What's your name?</h2>
+        <input type="text" id="name-input" maxlength="12" placeholder="e.g. Mike" autofocus>
+        <p class="name-error" id="name-error" hidden>Name must be 12 characters or less</p>
+        <button id="name-save">Let's go</button>
+      </div>
+    </div>
+
+    <div id="grid"></div>
+  </div>
+
+  <script>
+    let myName = localStorage.getItem('pp-name') || '';
+    let slots = {};
+
+    const gridEl = document.getElementById('grid');
+    const nameBar = document.getElementById('name-bar');
+    const displayName = document.getElementById('display-name');
+    const namePrompt = document.getElementById('name-prompt');
+    const nameInput = document.getElementById('name-input');
+    const nameSave = document.getElementById('name-save');
+    const renameBtn = document.getElementById('rename-btn');
+    const dateEl = document.getElementById('date');
+    const avatarEl = document.getElementById('avatar');
+
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const now = new Date();
+    dateEl.textContent = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}`;
+
+    function showNamePrompt() {
+      nameInput.value = myName;
+      namePrompt.hidden = false;
+      nameInput.focus();
+    }
+
+    function updateProfile() {
+      displayName.textContent = myName;
+      avatarEl.textContent = myName.charAt(0).toUpperCase();
+    }
+
+    const nameError = document.getElementById('name-error');
+
+    function saveName() {
+      const val = nameInput.value.trim();
+      if (!val) return;
+      if (val.length > 12) {
+        nameError.hidden = false;
+        return;
+      }
+      nameError.hidden = true;
+      myName = val;
+      localStorage.setItem('pp-name', myName);
+      namePrompt.hidden = true;
+      updateProfile();
+      nameBar.hidden = false;
+    }
+
+    if (!myName) {
+      nameBar.hidden = true;
+      showNamePrompt();
+    } else {
+      updateProfile();
+    }
+
+    nameSave.addEventListener('click', saveName);
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveName();
+    });
+    renameBtn.addEventListener('click', showNamePrompt);
+
+    function formatTime(slot) {
+      const [h, m] = slot.split(':').map(Number);
+      const suffix = h >= 12 ? 'PM' : 'AM';
+      const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+      return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+    }
+
+    function isPastSlot(slot) {
+      const now = new Date();
+      const [h, m] = slot.split(':').map(Number);
+      const slotEnd = h * 60 + m + 30;
+      const current = now.getHours() * 60 + now.getMinutes();
+      return current >= slotEnd;
+    }
+
+    function render() {
+      gridEl.innerHTML = '';
+      const slotKeys = Object.keys(slots).sort();
+
+      for (const slot of slotKeys) {
+        const names = slots[slot];
+        const past = isPastSlot(slot);
+        const cell = document.createElement('div');
+        cell.className = 'slot';
+
+        if (past) cell.classList.add('past');
+        if (names.length >= 2) cell.classList.add('match');
+        if (names.includes(myName)) cell.classList.add('mine');
+
+        const time = document.createElement('div');
+        time.className = 'slot-time';
+        time.textContent = formatTime(slot);
+        cell.appendChild(time);
+
+        const people = document.createElement('div');
+        people.className = 'slot-people';
+
+        const MAX_VISIBLE = 5;
+        if (names.length > 0) {
+          const visible = names.slice(0, MAX_VISIBLE);
+          const overflow = names.length - MAX_VISIBLE;
+
+          for (const n of visible) {
+            const tag = document.createElement('span');
+            tag.className = 'name-tag';
+            if (n === myName) tag.classList.add('me');
+            tag.textContent = n;
+            people.appendChild(tag);
+          }
+
+          if (overflow > 0) {
+            const hiddenContainer = document.createElement('div');
+            hiddenContainer.className = 'overflow-names';
+            hiddenContainer.hidden = true;
+            for (const n of names.slice(MAX_VISIBLE)) {
+              const tag = document.createElement('span');
+              tag.className = 'name-tag';
+              if (n === myName) tag.classList.add('me');
+              tag.textContent = n;
+              hiddenContainer.appendChild(tag);
+            }
+            people.appendChild(hiddenContainer);
+
+            const more = document.createElement('span');
+            more.className = 'overflow-toggle';
+            more.textContent = `+${overflow} more`;
+            more.addEventListener('click', (e) => {
+              e.stopPropagation();
+              hiddenContainer.hidden = !hiddenContainer.hidden;
+              more.textContent = hiddenContainer.hidden ? `+${overflow} more` : 'show less';
+            });
+            people.appendChild(more);
+          }
+        }
+        cell.appendChild(people);
+
+        if (names.length >= 2) {
+          const badge = document.createElement('div');
+          badge.className = 'match-badge';
+          badge.textContent = `★ ${names.length}`;
+          cell.appendChild(badge);
+        }
+
+        if (!past) cell.addEventListener('click', () => toggle(slot));
+        gridEl.appendChild(cell);
+      }
+    }
+
+    async function toggle(slot) {
+      if (!myName) { showNamePrompt(); return; }
+      await fetch('/api/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: myName, slot }),
+      });
+    }
+
+    const evtSource = new EventSource('/api/events');
+    evtSource.onmessage = (e) => {
+      slots = JSON.parse(e.data);
+      render();
+    };
+
+    setInterval(render, 60000);
+  </script>
+</body>
+</html>

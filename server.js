@@ -55,6 +55,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS entries (
   name TEXT NOT NULL,
   PRIMARY KEY (date, slot, name)
 )`);
+db.exec(`CREATE TABLE IF NOT EXISTS users (
+  name TEXT PRIMARY KEY,
+  created TEXT NOT NULL
+)`);
 
 const stmts = {
   insert: db.prepare('INSERT OR IGNORE INTO entries (date, slot, name) VALUES (?, ?, ?)'),
@@ -63,6 +67,8 @@ const stmts = {
   loadDay: db.prepare('SELECT slot, name FROM entries WHERE date = ?'),
   clearOld: db.prepare('DELETE FROM entries WHERE date != ?'),
   clearAll: db.prepare('DELETE FROM entries'),
+  findUser: db.prepare('SELECT 1 FROM users WHERE name = ?'),
+  registerUser: db.prepare('INSERT OR IGNORE INTO users (name, created) VALUES (?, ?)'),
 };
 
 function todayStr() {
@@ -161,6 +167,22 @@ app.post('/api/toggle', (req, res) => {
 
   broadcast();
   res.json({ ok: true });
+});
+
+app.post('/api/register', (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string') {
+    return res.status(400).json({ error: 'Invalid name' });
+  }
+  const sanitized = name.trim().slice(0, 12);
+  if (!sanitized) return res.status(400).json({ error: 'Name is empty' });
+
+  const existing = stmts.findUser.get(sanitized);
+  if (existing) {
+    return res.json({ ok: true, warning: `"${sanitized}" is already taken. Consider adding a last initial to avoid confusion.` });
+  }
+  stmts.registerUser.run(sanitized, todayStr());
+  return res.json({ ok: true });
 });
 
 app.post('/api/clear', (req, res) => {

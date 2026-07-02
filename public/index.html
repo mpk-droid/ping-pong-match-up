@@ -83,14 +83,8 @@
       });
       const data = await resp.json();
 
-      if (data.warning && val !== myName) {
-        nameError.textContent = data.warning;
-        nameError.hidden = false;
-        nameError.style.color = '#ff9800';
-        const proceed = confirm(data.warning + '\n\nContinue with this name anyway?');
-        nameError.hidden = true;
-        nameError.style.color = '';
-        nameError.textContent = 'Name must be 12 characters or less';
+      if (data.warning && val.toLowerCase() !== myName.toLowerCase()) {
+        const proceed = confirm(data.warning);
         if (!proceed) return;
       }
 

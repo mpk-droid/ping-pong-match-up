@@ -62,12 +62,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS users (
 
 const stmts = {
   insert: db.prepare('INSERT OR IGNORE INTO entries (date, slot, name) VALUES (?, ?, ?)'),
-  remove: db.prepare('DELETE FROM entries WHERE date = ? AND slot = ? AND name = ?'),
-  exists: db.prepare('SELECT 1 FROM entries WHERE date = ? AND slot = ? AND name = ?'),
+  remove: db.prepare('DELETE FROM entries WHERE date = ? AND slot = ? AND LOWER(name) = LOWER(?)'),
+  exists: db.prepare('SELECT 1 FROM entries WHERE date = ? AND slot = ? AND LOWER(name) = LOWER(?)'),
   loadDay: db.prepare('SELECT slot, name FROM entries WHERE date = ?'),
   clearOld: db.prepare('DELETE FROM entries WHERE date != ?'),
   clearAll: db.prepare('DELETE FROM entries'),
-  findUser: db.prepare('SELECT 1 FROM users WHERE name = ?'),
+  findUser: db.prepare('SELECT 1 FROM users WHERE LOWER(name) = LOWER(?)'),
   registerUser: db.prepare('INSERT OR IGNORE INTO users (name, created) VALUES (?, ?)'),
 };
 
@@ -180,7 +180,7 @@ app.post('/api/register', (req, res) => {
 
   const existing = stmts.findUser.get(sanitized);
   if (existing) {
-    return res.json({ ok: true, warning: `"${sanitized}" is already taken. Consider adding a last initial to avoid confusion.` });
+    return res.json({ ok: true, warning: `"${sanitized}" is already registered. If this is you, continue. Otherwise consider adding a last initial to avoid confusion.` });
   }
   stmts.registerUser.run(sanitized, todayStr());
   return res.json({ ok: true });

@@ -13,7 +13,7 @@
         <p class="date" id="date"></p>
       </div>
       <div class="header-center">
-        <h1>🏓 Ping Pong (RH - Boston)</h1>
+        <h1>Ping Pong (RH - Boston)</h1>
         <p class="hint">Tap a slot to mark yourself available (tap again to clear selection)</p>
       </div>
       <div class="header-right" id="name-bar">
@@ -134,6 +134,17 @@
       const slotKeys = Object.keys(slots).sort();
 
       for (const slot of slotKeys) {
+        if (slot === '09:00') {
+          const gifCell = document.createElement('div');
+          gifCell.className = 'slot gif-slot';
+          const img = document.createElement('img');
+          img.src = 'cat.gif';
+          img.alt = 'Ping pong cat';
+          gifCell.appendChild(img);
+          gridEl.appendChild(gifCell);
+          continue;
+        }
+
         const names = slots[slot];
         const past = isPastSlot(slot);
         const cell = document.createElement('div');

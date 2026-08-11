@@ -141,6 +141,36 @@ app.get('/api/today', (_req, res) => {
 });
 
 const MAX_NAMES_PER_SLOT = 20;
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+
+function formatTime(slot) {
+  const [h, m] = slot.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+function buildSlackMessage(names, slot) {
+  const time = formatTime(slot);
+  const count = names.length;
+  if (count === 1) {
+    return `🏓 ${names[0]} is available at ${time}. Looking for a partner!`;
+  }
+  if (count === 2) {
+    return `🏓 ${names[0]} and ${names[1]} are playing at ${time}. Wanna join?`;
+  }
+  return `🏓 ${names[0]}, ${names[1]} and more are playing at ${time}`;
+}
+
+function notifySlack(names, slot) {
+  if (!SLACK_WEBHOOK_URL) return;
+  const text = buildSlackMessage(names, slot);
+  fetch(SLACK_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  }).catch(() => {});
+}
 
 app.post('/api/toggle', (req, res) => {
   const { name, slot } = req.body;
@@ -156,6 +186,7 @@ app.post('/api/toggle', (req, res) => {
 
   const today = todayStr();
   const exists = stmts.exists.get(today, slot, sanitized);
+  const wasBefore = (loadSlots()[slot] || []).length;
   if (exists) {
     stmts.remove.run(today, slot, sanitized);
   } else {
@@ -164,6 +195,16 @@ app.post('/api/toggle', (req, res) => {
       return res.status(409).json({ error: 'Slot is full' });
     }
     stmts.insert.run(today, slot, sanitized);
+  }
+
+  const after = loadSlots()[slot] || [];
+  const isNow = after.length;
+  const added = isNow > wasBefore;
+
+  if (added && isNow >= 1) {
+    notifySlack(after, slot);
+  } else if (!added && isNow === 1) {
+    notifySlack(after, slot);
   }
 
   broadcast();

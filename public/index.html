@@ -272,11 +272,27 @@
     function scheduleNotifications({ added, removed }) {
       for (const [name, slots] of Object.entries(added)) {
         if (!pendingAdded[name]) pendingAdded[name] = new Set();
-        for (const s of slots) pendingAdded[name].add(s);
+        for (const s of slots) {
+          if (pendingRemoved[name] && pendingRemoved[name].has(s)) {
+            pendingRemoved[name].delete(s);
+            if (pendingRemoved[name].size === 0) delete pendingRemoved[name];
+          } else {
+            pendingAdded[name].add(s);
+          }
+        }
+        if (pendingAdded[name] && pendingAdded[name].size === 0) delete pendingAdded[name];
       }
       for (const [name, slots] of Object.entries(removed)) {
         if (!pendingRemoved[name]) pendingRemoved[name] = new Set();
-        for (const s of slots) pendingRemoved[name].add(s);
+        for (const s of slots) {
+          if (pendingAdded[name] && pendingAdded[name].has(s)) {
+            pendingAdded[name].delete(s);
+            if (pendingAdded[name].size === 0) delete pendingAdded[name];
+          } else {
+            pendingRemoved[name].add(s);
+          }
+        }
+        if (pendingRemoved[name] && pendingRemoved[name].size === 0) delete pendingRemoved[name];
       }
       const hasPending = Object.keys(pendingAdded).length > 0 || Object.keys(pendingRemoved).length > 0;
       if (!notifyTimer && hasPending) {

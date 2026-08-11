@@ -216,9 +216,62 @@
       });
     }
 
+    if ('Notification' in window && Notification.permission === 'default') {
+      document.addEventListener('click', () => Notification.requestPermission(), { once: true });
+    }
+
+    let firstLoad = true;
+    const pendingNotifications = {};
+    let notifyTimer = null;
+    const NOTIFY_DELAY = 2 * 60 * 1000;
+
+    function diffSlots(oldSlots, newSlots) {
+      const added = {};
+      for (const slot of Object.keys(newSlots)) {
+        const oldNames = (oldSlots[slot] || []).map(n => n.toLowerCase());
+        for (const name of newSlots[slot]) {
+          if (!oldNames.includes(name.toLowerCase()) && name.toLowerCase() !== myName.toLowerCase()) {
+            if (!added[name]) added[name] = [];
+            added[name].push(slot);
+          }
+        }
+      }
+      return added;
+    }
+
+    function flushNotifications() {
+      if (Notification.permission !== 'granted') return;
+      const entries = Object.entries(pendingNotifications);
+      for (const [name, slotSet] of entries) {
+        const times = [...slotSet].sort().map(formatTime).join(', ');
+        new Notification('\u{1F3D3} Ping Pong', {
+          body: `${name} is available at ${times}`,
+          tag: `pp-${name}`,
+        });
+      }
+      for (const key of Object.keys(pendingNotifications)) delete pendingNotifications[key];
+      notifyTimer = null;
+    }
+
+    function scheduleNotifications(added) {
+      for (const [name, slots] of Object.entries(added)) {
+        if (!pendingNotifications[name]) pendingNotifications[name] = new Set();
+        for (const s of slots) pendingNotifications[name].add(s);
+      }
+      if (!notifyTimer && Object.keys(pendingNotifications).length > 0) {
+        notifyTimer = setTimeout(flushNotifications, NOTIFY_DELAY);
+      }
+    }
+
     const evtSource = new EventSource('/api/events');
     evtSource.onmessage = (e) => {
-      slots = JSON.parse(e.data);
+      const newSlots = JSON.parse(e.data);
+      if (!firstLoad) {
+        const added = diffSlots(slots, newSlots);
+        if (Object.keys(added).length > 0) scheduleNotifications(added);
+      }
+      firstLoad = false;
+      slots = newSlots;
       render();
     };
 

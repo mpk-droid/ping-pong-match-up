@@ -221,44 +221,65 @@
     }
 
     let firstLoad = true;
-    const pendingNotifications = {};
+    const pendingAdded = {};
+    const pendingRemoved = {};
     let notifyTimer = null;
     const NOTIFY_DELAY = 2 * 60 * 1000;
 
     function diffSlots(oldSlots, newSlots) {
       const added = {};
+      const removed = {};
       for (const slot of Object.keys(newSlots)) {
         const oldNames = (oldSlots[slot] || []).map(n => n.toLowerCase());
+        const newNames = newSlots[slot].map(n => n.toLowerCase());
         for (const name of newSlots[slot]) {
           if (!oldNames.includes(name.toLowerCase()) && name.toLowerCase() !== myName.toLowerCase()) {
             if (!added[name]) added[name] = [];
             added[name].push(slot);
           }
         }
+        for (const name of (oldSlots[slot] || [])) {
+          if (!newNames.includes(name.toLowerCase()) && name.toLowerCase() !== myName.toLowerCase()) {
+            if (!removed[name]) removed[name] = [];
+            removed[name].push(slot);
+          }
+        }
       }
-      return added;
+      return { added, removed };
     }
 
     function flushNotifications() {
       if (Notification.permission !== 'granted') return;
-      const entries = Object.entries(pendingNotifications);
-      for (const [name, slotSet] of entries) {
+      for (const [name, slotSet] of Object.entries(pendingAdded)) {
         const times = [...slotSet].sort().map(formatTime).join(', ');
         new Notification('\u{1F3D3} Ping Pong', {
           body: `${name} is available at ${times}`,
-          tag: `pp-${name}`,
+          tag: `pp-add-${name}`,
         });
       }
-      for (const key of Object.keys(pendingNotifications)) delete pendingNotifications[key];
+      for (const [name, slotSet] of Object.entries(pendingRemoved)) {
+        const times = [...slotSet].sort().map(formatTime).join(', ');
+        new Notification('\u{1F3D3} Ping Pong', {
+          body: `${name} is no longer available at ${times}`,
+          tag: `pp-rm-${name}`,
+        });
+      }
+      for (const key of Object.keys(pendingAdded)) delete pendingAdded[key];
+      for (const key of Object.keys(pendingRemoved)) delete pendingRemoved[key];
       notifyTimer = null;
     }
 
-    function scheduleNotifications(added) {
+    function scheduleNotifications({ added, removed }) {
       for (const [name, slots] of Object.entries(added)) {
-        if (!pendingNotifications[name]) pendingNotifications[name] = new Set();
-        for (const s of slots) pendingNotifications[name].add(s);
+        if (!pendingAdded[name]) pendingAdded[name] = new Set();
+        for (const s of slots) pendingAdded[name].add(s);
       }
-      if (!notifyTimer && Object.keys(pendingNotifications).length > 0) {
+      for (const [name, slots] of Object.entries(removed)) {
+        if (!pendingRemoved[name]) pendingRemoved[name] = new Set();
+        for (const s of slots) pendingRemoved[name].add(s);
+      }
+      const hasPending = Object.keys(pendingAdded).length > 0 || Object.keys(pendingRemoved).length > 0;
+      if (!notifyTimer && hasPending) {
         notifyTimer = setTimeout(flushNotifications, NOTIFY_DELAY);
       }
     }
@@ -267,8 +288,10 @@
     evtSource.onmessage = (e) => {
       const newSlots = JSON.parse(e.data);
       if (!firstLoad) {
-        const added = diffSlots(slots, newSlots);
-        if (Object.keys(added).length > 0) scheduleNotifications(added);
+        const changes = diffSlots(slots, newSlots);
+        if (Object.keys(changes.added).length > 0 || Object.keys(changes.removed).length > 0) {
+          scheduleNotifications(changes);
+        }
       }
       firstLoad = false;
       slots = newSlots;

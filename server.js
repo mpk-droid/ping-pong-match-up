@@ -229,7 +229,10 @@ app.post('/api/register', (req, res) => {
 
 app.post('/api/clear', (req, res) => {
   stmts.clearAll.run();
-  broadcast();
+  const data = JSON.stringify(loadSlots());
+  for (const c of clients) {
+    c.write(`event: clear\ndata: ${data}\n\n`);
+  }
   res.json({ ok: true });
 });
 

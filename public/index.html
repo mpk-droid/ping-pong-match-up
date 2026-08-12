@@ -301,6 +301,10 @@
     }
 
     const evtSource = new EventSource('/api/events');
+    evtSource.addEventListener('clear', (e) => {
+      slots = JSON.parse(e.data);
+      render();
+    });
     evtSource.onmessage = (e) => {
       const newSlots = JSON.parse(e.data);
       if (!firstLoad) {

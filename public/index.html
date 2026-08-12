@@ -220,101 +220,18 @@
       document.addEventListener('click', () => Notification.requestPermission(), { once: true });
     }
 
-    let firstLoad = true;
-    const pendingAdded = {};
-    const pendingRemoved = {};
-    let notifyTimer = null;
-    const NOTIFY_DELAY = 2 * 60 * 1000;
-
-    function diffSlots(oldSlots, newSlots) {
-      const added = {};
-      const removed = {};
-      for (const slot of Object.keys(newSlots)) {
-        const oldNames = (oldSlots[slot] || []).map(n => n.toLowerCase());
-        const newNames = newSlots[slot].map(n => n.toLowerCase());
-        for (const name of newSlots[slot]) {
-          if (!oldNames.includes(name.toLowerCase()) && name.toLowerCase() !== myName.toLowerCase()) {
-            if (!added[name]) added[name] = [];
-            added[name].push(slot);
-          }
-        }
-        for (const name of (oldSlots[slot] || [])) {
-          if (!newNames.includes(name.toLowerCase()) && name.toLowerCase() !== myName.toLowerCase()) {
-            if (!removed[name]) removed[name] = [];
-            removed[name].push(slot);
-          }
-        }
-      }
-      return { added, removed };
-    }
-
-    function flushNotifications() {
-      if (Notification.permission !== 'granted') return;
-      for (const [name, slotSet] of Object.entries(pendingAdded)) {
-        const times = [...slotSet].sort().map(formatTime).join(', ');
-        new Notification('\u{1F3D3} Ping Pong', {
-          body: `${name} is available at ${times}`,
-          tag: `pp-add-${name}`,
-        });
-      }
-      for (const [name, slotSet] of Object.entries(pendingRemoved)) {
-        const times = [...slotSet].sort().map(formatTime).join(', ');
-        new Notification('\u{1F3D3} Ping Pong', {
-          body: `${name} is no longer available at ${times}`,
-          tag: `pp-rm-${name}`,
-        });
-      }
-      for (const key of Object.keys(pendingAdded)) delete pendingAdded[key];
-      for (const key of Object.keys(pendingRemoved)) delete pendingRemoved[key];
-      notifyTimer = null;
-    }
-
-    function scheduleNotifications({ added, removed }) {
-      for (const [name, slots] of Object.entries(added)) {
-        if (!pendingAdded[name]) pendingAdded[name] = new Set();
-        for (const s of slots) {
-          if (pendingRemoved[name] && pendingRemoved[name].has(s)) {
-            pendingRemoved[name].delete(s);
-            if (pendingRemoved[name].size === 0) delete pendingRemoved[name];
-          } else {
-            pendingAdded[name].add(s);
-          }
-        }
-        if (pendingAdded[name] && pendingAdded[name].size === 0) delete pendingAdded[name];
-      }
-      for (const [name, slots] of Object.entries(removed)) {
-        if (!pendingRemoved[name]) pendingRemoved[name] = new Set();
-        for (const s of slots) {
-          if (pendingAdded[name] && pendingAdded[name].has(s)) {
-            pendingAdded[name].delete(s);
-            if (pendingAdded[name].size === 0) delete pendingAdded[name];
-          } else {
-            pendingRemoved[name].add(s);
-          }
-        }
-        if (pendingRemoved[name] && pendingRemoved[name].size === 0) delete pendingRemoved[name];
-      }
-      const hasPending = Object.keys(pendingAdded).length > 0 || Object.keys(pendingRemoved).length > 0;
-      if (!notifyTimer && hasPending) {
-        notifyTimer = setTimeout(flushNotifications, NOTIFY_DELAY);
-      }
-    }
-
     const evtSource = new EventSource('/api/events');
     evtSource.addEventListener('clear', (e) => {
       slots = JSON.parse(e.data);
       render();
     });
+    evtSource.addEventListener('notify', (e) => {
+      if (Notification.permission !== 'granted') return;
+      const { text } = JSON.parse(e.data);
+      new Notification('\u{1F3D3} Ping Pong', { body: text });
+    });
     evtSource.onmessage = (e) => {
-      const newSlots = JSON.parse(e.data);
-      if (!firstLoad) {
-        const changes = diffSlots(slots, newSlots);
-        if (Object.keys(changes.added).length > 0 || Object.keys(changes.removed).length > 0) {
-          scheduleNotifications(changes);
-        }
-      }
-      firstLoad = false;
-      slots = newSlots;
+      slots = JSON.parse(e.data);
       render();
     };
 

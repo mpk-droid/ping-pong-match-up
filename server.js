@@ -142,6 +142,7 @@ app.get('/api/today', (_req, res) => {
 
 const MAX_NAMES_PER_SLOT = 20;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+const NOTIFY_DELAY = 60 * 1000;
 
 function formatTime(slot) {
   const [h, m] = slot.split(':').map(Number);
@@ -150,7 +151,29 @@ function formatTime(slot) {
   return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
-function buildSlackMessage(names, slot) {
+// --- Notification batching ---
+let notifyTimer = null;
+let slotsBefore = null;
+
+function buildNotifications(before, after) {
+  const messages = [];
+  for (const slot of SLOTS) {
+    const oldNames = (before[slot] || []).map(n => n.toLowerCase());
+    const newNames = after[slot] || [];
+    const countBefore = oldNames.length;
+    const countNow = newNames.length;
+    const added = countNow > countBefore;
+
+    if (added && countNow >= 1) {
+      messages.push(buildMessage(newNames, slot));
+    } else if (!added && countNow === 1) {
+      messages.push(buildMessage(newNames, slot));
+    }
+  }
+  return messages;
+}
+
+function buildMessage(names, slot) {
   const time = formatTime(slot);
   const count = names.length;
   if (count === 1) {
@@ -162,14 +185,34 @@ function buildSlackMessage(names, slot) {
   return `🏓 ${names[0]}, ${names[1]} and more are playing at ${time}`;
 }
 
-function notifySlack(names, slot) {
-  if (!SLACK_WEBHOOK_URL) return;
-  const text = buildSlackMessage(names, slot);
-  fetch(SLACK_WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  }).catch(() => {});
+function flushNotifications() {
+  const after = loadSlots();
+  const messages = buildNotifications(slotsBefore, after);
+
+  for (const text of messages) {
+    if (SLACK_WEBHOOK_URL) {
+      fetch(SLACK_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      }).catch(() => {});
+    }
+
+    const notifyData = JSON.stringify({ text });
+    for (const c of clients) {
+      c.write(`event: notify\ndata: ${notifyData}\n\n`);
+    }
+  }
+
+  notifyTimer = null;
+  slotsBefore = null;
+}
+
+function scheduleNotification() {
+  if (!notifyTimer) {
+    slotsBefore = loadSlots();
+    notifyTimer = setTimeout(flushNotifications, NOTIFY_DELAY);
+  }
 }
 
 app.post('/api/toggle', (req, res) => {
@@ -186,7 +229,6 @@ app.post('/api/toggle', (req, res) => {
 
   const today = todayStr();
   const exists = stmts.exists.get(today, slot, sanitized);
-  const wasBefore = (loadSlots()[slot] || []).length;
   if (exists) {
     stmts.remove.run(today, slot, sanitized);
   } else {
@@ -197,16 +239,7 @@ app.post('/api/toggle', (req, res) => {
     stmts.insert.run(today, slot, sanitized);
   }
 
-  const after = loadSlots()[slot] || [];
-  const isNow = after.length;
-  const added = isNow > wasBefore;
-
-  if (added && isNow >= 1) {
-    notifySlack(after, slot);
-  } else if (!added && isNow === 1) {
-    notifySlack(after, slot);
-  }
-
+  scheduleNotification();
   broadcast();
   res.json({ ok: true });
 });

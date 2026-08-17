@@ -161,6 +161,8 @@ app.get('/api/today', (_req, res) => {
 
 const MAX_NAMES_PER_SLOT = 20;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+const DASHBOARD_URL = process.env.DASHBOARD_URL
+  || 'https://ping-pong-pk-individual.apps.rosa.agen-e2e-rhoai2.p5ui.p3.openshiftapps.com';
 
 function formatTime(slot) {
   const [h, m] = slot.split(':').map(Number);
@@ -212,10 +214,11 @@ function buildSummaryBlock() {
 
 function postSlack(text) {
   if (!SLACK_WEBHOOK_URL) return;
+  const fullText = `${text}\n<${DASHBOARD_URL}|Dashboard>`;
   fetch(SLACK_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text: fullText }),
   }).catch(() => {});
 }
 

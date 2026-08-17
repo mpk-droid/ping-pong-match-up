@@ -42,6 +42,8 @@ spec:
               value: "/data/pingpong.db"
             - name: OFFICE_TZ
               value: "America/New_York"
+            - name: DASHBOARD_URL
+              value: "https://ping-pong-pk-individual.apps.rosa.agen-e2e-rhoai2.p5ui.p3.openshiftapps.com"
           volumeMounts:
             - name: data
               mountPath: /data

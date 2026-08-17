@@ -44,6 +44,7 @@ for (let h = 9; h < 18; h++) {
 }
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'pingpong.db');
+const OFFICE_TZ = process.env.OFFICE_TZ || 'America/New_York';
 const dbDir = path.dirname(DB_PATH);
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
@@ -72,7 +73,25 @@ const stmts = {
 };
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: OFFICE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+function officeTimeParts() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: OFFICE_TZ,
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  }).formatToParts(new Date());
+  return {
+    hour: Number(parts.find((p) => p.type === 'hour').value),
+    minute: Number(parts.find((p) => p.type === 'minute').value),
+  };
 }
 
 function loadSlots() {
@@ -152,10 +171,10 @@ function formatTimeShort(slot) {
 }
 
 function isPastSlot(slot) {
-  const now = new Date();
+  const { hour, minute } = officeTimeParts();
   const [h, m] = slot.split(':').map(Number);
   const slotEnd = h * 60 + m + 30;
-  const current = now.getHours() * 60 + now.getMinutes();
+  const current = hour * 60 + minute;
   return current >= slotEnd;
 }
 

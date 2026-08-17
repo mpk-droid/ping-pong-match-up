@@ -40,6 +40,8 @@ spec:
               value: "8080"
             - name: DB_PATH
               value: "/data/pingpong.db"
+            - name: OFFICE_TZ
+              value: "America/New_York"
           volumeMounts:
             - name: data
               mountPath: /data

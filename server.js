@@ -8,6 +8,8 @@ const Database = require('better-sqlite3');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+app.set('trust proxy', 1);
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -291,12 +293,14 @@ app.post('/api/toggle', (req, res) => {
   const exists = stmts.exists.get(today, slot, sanitized);
   if (exists) {
     stmts.remove.run(today, slot, sanitized);
+    console.log(`toggle ${sanitized} ${slot} remove`);
   } else {
     const currentSlot = loadSlots()[slot] || [];
     if (currentSlot.length >= MAX_NAMES_PER_SLOT) {
       return res.status(409).json({ error: 'Slot is full' });
     }
     stmts.insert.run(today, slot, sanitized);
+    console.log(`toggle ${sanitized} ${slot} add`);
   }
 
   const names = loadSlots()[slot] || [];

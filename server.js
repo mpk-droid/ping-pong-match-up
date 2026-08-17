@@ -210,7 +210,7 @@ function buildSummaryBlock() {
     if (names.length === 0) continue;
     lines.push(`${formatTimeShort(slot)}: ${names.join(', ')}`);
   }
-  const body = lines.length > 0 ? lines.join('\n') : 'empty slots';
+  const body = lines.length > 0 ? lines.join('\n') : "no one's marked free yet — grab a slot!";
   return `\`\`\`\n${body}\n\`\`\``;
 }
 

@@ -236,13 +236,21 @@ function notifyToggle(slot, names) {
   postBrowserNotify(text);
 }
 
+// 9am, 11am, 1pm, 3pm, 5pm, 6pm office time (every 2h from 9–5, plus 6pm)
+const SUMMARY_HOURS = [9, 11, 13, 15, 17, 18];
+let lastSummaryKey = null;
+
 function postSummary() {
+  const { hour } = officeTimeParts();
+  if (!SUMMARY_HOURS.includes(hour)) return;
+
+  const key = `${todayStr()}-${hour}`;
+  if (lastSummaryKey === key) return;
+  lastSummaryKey = key;
+
   ensureToday();
   postSlack(buildSummaryBlock());
 }
-
-// 9am, 11am, 1pm, 3pm, 5pm, 6pm office time (every 2h from 9–5, plus 6pm)
-const SUMMARY_HOURS = [9, 11, 13, 15, 17, 18];
 
 function msUntilNextSummary() {
   const { hour, minute } = officeTimeParts();
@@ -250,7 +258,7 @@ function msUntilNextSummary() {
 
   for (const h of SUMMARY_HOURS) {
     const targetMins = h * 60;
-    if (currentMins <= targetMins) {
+    if (currentMins < targetMins) {
       return (targetMins - currentMins) * 60 * 1000;
     }
   }

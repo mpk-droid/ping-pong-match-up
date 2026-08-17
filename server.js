@@ -121,11 +121,28 @@ function getClientIp(req) {
 }
 
 function broadcast() {
-  const data = JSON.stringify(loadSlots());
-  for (const res of clients) {
-    res.write(`data: ${data}\n\n`);
+  const payload = `data: ${JSON.stringify(loadSlots())}\n\n`;
+  for (let i = clients.length - 1; i >= 0; i--) {
+    try {
+      clients[i].write(payload);
+    } catch {
+      clients.splice(i, 1);
+    }
   }
 }
+
+function sseHeartbeat() {
+  for (let i = clients.length - 1; i >= 0; i--) {
+    try {
+      clients[i].write(': heartbeat\n\n');
+    } catch {
+      clients.splice(i, 1);
+    }
+  }
+}
+
+const SSE_HEARTBEAT_MS = 20_000;
+setInterval(sseHeartbeat, SSE_HEARTBEAT_MS);
 
 app.get('/api/events', (req, res) => {
   if (clients.length >= MAX_SSE_CLIENTS) {
@@ -140,8 +157,9 @@ app.get('/api/events', (req, res) => {
 
   res.set({
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
   });
   res.flushHeaders();
 
@@ -306,7 +324,7 @@ app.post('/api/toggle', (req, res) => {
   const names = loadSlots()[slot] || [];
   notifyToggle(slot, names);
   broadcast();
-  res.json({ ok: true });
+  res.json({ ok: true, slots: loadSlots() });
 });
 
 app.post('/api/register', (req, res) => {

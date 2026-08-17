@@ -108,6 +108,10 @@
     });
     renameBtn.addEventListener('click', showNamePrompt);
 
+    if ('Notification' in window && Notification.permission === 'default') {
+      document.addEventListener('click', () => Notification.requestPermission(), { once: true });
+    }
+
     function formatTime(slot) {
       const [h, m] = slot.split(':').map(Number);
       const suffix = h >= 12 ? 'PM' : 'AM';
@@ -209,21 +213,48 @@
 
     async function toggle(slot) {
       if (!myName) { showNamePrompt(); return; }
-      await fetch('/api/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: myName, slot }),
-      });
+      try {
+        const resp = await fetch('/api/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: myName, slot }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.slots) applySlots(data.slots);
+        } else {
+          pollSlots();
+        }
+      } catch {
+        pollSlots();
+      }
     }
 
-    if ('Notification' in window && Notification.permission === 'default') {
-      document.addEventListener('click', () => Notification.requestPermission(), { once: true });
+    const POLL_MS = 5000;
+    let slotsJson = '';
+
+    function applySlots(next) {
+      const nextJson = JSON.stringify(next);
+      if (nextJson === slotsJson) return;
+      slotsJson = nextJson;
+      slots = next;
+      render();
     }
+
+    async function pollSlots() {
+      try {
+        const resp = await fetch('/api/today');
+        if (resp.ok) applySlots(await resp.json());
+      } catch {
+        /* retry on next poll */
+      }
+    }
+
+    pollSlots();
 
     const evtSource = new EventSource('/api/events');
     evtSource.addEventListener('clear', (e) => {
-      slots = JSON.parse(e.data);
-      render();
+      applySlots(JSON.parse(e.data));
     });
     evtSource.addEventListener('notify', (e) => {
       if (Notification.permission !== 'granted') return;
@@ -231,11 +262,16 @@
       new Notification('\u{1F3D3} Ping Pong', { body: text });
     });
     evtSource.onmessage = (e) => {
-      slots = JSON.parse(e.data);
-      render();
+      applySlots(JSON.parse(e.data));
+    };
+    evtSource.onerror = () => {
+      pollSlots();
     };
 
-    setInterval(render, 60000);
+    setInterval(pollSlots, POLL_MS);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') pollSlots();
+    });
   </script>
 </body>
 </html>

@@ -14,8 +14,8 @@ alwaysApply: false
 
 ## State & Rendering
 
-- `myName` from `localStorage` (`pp-name`); `slots` from SSE
-- `render()` rebuilds grid DOM on every update — keep it simple
+- `myName` from `localStorage` (`pp-name`); `slots` from SSE + `/api/today` polling (5s)
+- `applySlots()` dedupes JSON before re-render; poll on load, interval, tab visible, SSE error
 - `EventSource('/api/events')` handles `message`, `notify`, and `clear` events
 - Past slots get `.past` class and are not clickable
 

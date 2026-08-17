@@ -193,12 +193,12 @@ function buildToggleMessage(names, slot) {
   if (names.length === 0 || isPastSlot(slot)) return null;
   const time = formatTime(slot);
   if (names.length === 1) {
-    return `🏓 ${names[0]} is available at ${time}. Looking for a partner!`;
+    return `${names[0]} is available at ${time}. Looking for a partner!`;
   }
   if (names.length === 2) {
-    return `🏓 ${names[0]} and ${names[1]} are playing at ${time}. Wanna join?`;
+    return `${names[0]} and ${names[1]} are playing at ${time}. Wanna join?`;
   }
-  return `🏓 ${names[0]}, ${names[1]} and more are playing at ${time}`;
+  return `${names[0]}, ${names[1]} and more are playing at ${time}`;
 }
 
 function buildSummaryBlock() {

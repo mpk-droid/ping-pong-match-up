@@ -143,10 +143,11 @@ app.get('/api/today', (_req, res) => {
 const MAX_NAMES_PER_SLOT = 20;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 
-function formatTime(slot) {
+function formatTimeShort(slot) {
   const [h, m] = slot.split(':').map(Number);
-  const suffix = h >= 12 ? 'PM' : 'AM';
+  const suffix = h >= 12 ? 'pm' : 'am';
   const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  if (m === 0) return `${h12} ${suffix}`;
   return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
@@ -158,22 +159,29 @@ function isPastSlot(slot) {
   return current >= slotEnd;
 }
 
-function buildMessage(names, slot) {
-  const time = formatTime(slot);
-  const count = names.length;
-  if (count === 1) {
-    return `🏓 ${names[0]} is available at ${time}. Looking for a partner!`;
+function slotLine(names, slot) {
+  const time = formatTimeShort(slot);
+  if (names.length === 1) {
+    return `${time}: ${names[0]}. (Looking for partner)`;
   }
-  if (count === 2) {
-    return `🏓 ${names[0]} and ${names[1]} are playing at ${time}. Wanna join?`;
-  }
-  return `🏓 ${names[0]}, ${names[1]} and more are playing at ${time}`;
+  return `${time}: ${names.join(', ')} (wanna join?)`;
 }
 
-function notifySlot(slot, names) {
-  if (names.length === 0 || isPastSlot(slot)) return;
+function buildStatusMessage() {
+  const allSlots = loadSlots();
+  const lines = [];
+  for (const slot of SLOTS) {
+    if (isPastSlot(slot)) continue;
+    const names = allSlots[slot] || [];
+    if (names.length === 0) continue;
+    lines.push(slotLine(names, slot));
+  }
+  return lines.length > 0 ? lines.join('\n') : null;
+}
 
-  const text = buildMessage(names, slot);
+function notify() {
+  const text = buildStatusMessage();
+  if (!text) return;
 
   if (SLACK_WEBHOOK_URL) {
     fetch(SLACK_WEBHOOK_URL, {
@@ -213,8 +221,7 @@ app.post('/api/toggle', (req, res) => {
     stmts.insert.run(today, slot, sanitized);
   }
 
-  const names = loadSlots()[slot] || [];
-  notifySlot(slot, names);
+  notify();
   broadcast();
   res.json({ ok: true });
 });

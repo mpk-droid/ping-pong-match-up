@@ -1,0 +1,20 @@
+---
+description: Core project context for the ping pong availability board
+alwaysApply: true
+---
+
+# Ping Pong Board
+
+Read `AGENTS.md` for full architecture. Summary:
+
+- Express 5 + vanilla HTML/CSS/JS, **no build step**
+- SQLite persistence (`better-sqlite3`), not in-memory
+- Real-time via SSE (`/api/events`); full state broadcast on toggle
+- 18 slots (09:00–17:30), names max 12 chars, `localStorage` key `pp-name`
+- Single OpenShift replica with PVC; daily clear via CronJob → `POST /api/clear`
+
+When editing:
+- Minimize scope; match existing code style
+- Do not add frameworks, bundlers, or TypeScript
+- Do not add auth — nicknames are self-reported
+- Keep `server.js` and inline `index.html` JS in sync on API contracts

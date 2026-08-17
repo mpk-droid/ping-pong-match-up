@@ -50,7 +50,8 @@ SSE event types: default `message` (slot state), `notify` (browser notification 
 - `ensureToday()` deletes entries for past dates on each request
 - Frontend stores user's name in `localStorage` under key `pp-name`
 - No authentication — identity is self-reported nickname only
-- Optional `SLACK_WEBHOOK_URL` for immediate Slack notifications on toggle
+- Optional `SLACK_WEBHOOK_URL` for immediate Slack on tap + scheduled summaries (9/11/1/3/5/6 PM Eastern)
+- Toggle audit log: `toggle <name> <slot> add|remove` — debug Slack via `oc logs deployment/ping-pong -n pk-individual --timestamps`
 
 ## Deployment Notes
 

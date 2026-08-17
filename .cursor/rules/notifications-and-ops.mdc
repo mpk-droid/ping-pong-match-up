@@ -1,0 +1,43 @@
+---
+description: Slack notifications, timezone, logging, and OpenShift debugging
+globs: server.js,openshift/**/*
+alwaysApply: false
+---
+
+# Notifications & Ops
+
+## Slack behavior
+
+- **On tap**: immediate per-slot message (`buildToggleMessage`) — not a full summary
+- **Scheduled**: code-block summary at 9, 11, 1, 3, 5, 6 PM `America/New_York`; dedupe one per hour
+- All Slack posts append `<DASHBOARD_URL|Dashboard>` link
+- Slot times are office-local; `isPastSlot()` and `todayStr()` use `OFFICE_TZ` (not pod UTC)
+
+## Toggle logging
+
+Every successful toggle logs one line:
+
+```text
+toggle pk 13:30 add
+toggle pk 13:30 remove
+```
+
+Match Slack message times to these lines in pod logs.
+
+## Debugging Slack posts
+
+```bash
+oc logs deployment/ping-pong -n pk-individual --timestamps --tail=50
+```
+
+- No toggle log line → likely scheduled summary or Slack webhook retry, not a tap
+- `trust proxy` is set to `1` for OpenShift ingress (rate limiter uses X-Forwarded-For)
+
+## OpenShift deploy
+
+```bash
+oc start-build ping-pong --from-dir=. --follow -n pk-individual
+oc rollout restart deployment/ping-pong -n pk-individual
+```
+
+Namespace: `pk-individual`. Do not `oc apply` deployment.yaml blindly — live env has `SLACK_WEBHOOK_URL` set via `oc set env`.

@@ -1,0 +1,32 @@
+---
+description: Frontend conventions for vanilla HTML/CSS/JS
+globs: public/**/*
+alwaysApply: false
+---
+
+# Frontend Conventions
+
+## Structure
+
+- All JS lives inline in `public/index.html` — no separate JS files
+- Styles in `public/style.css`; dark mode via `prefers-color-scheme`
+- Mobile-first layout
+
+## State & Rendering
+
+- `myName` from `localStorage` (`pp-name`); `slots` from SSE
+- `render()` rebuilds grid DOM on every update — keep it simple
+- `EventSource('/api/events')` handles `message`, `notify`, and `clear` events
+- Past slots get `.past` class and are not clickable
+
+## Slot Styling Classes
+
+- `.mine` — user is in this slot
+- `.match` — 2+ people (green)
+- `.past` — slot time has passed
+
+## API Usage
+
+- `POST /api/register` on name save (duplicate-name warning)
+- `POST /api/toggle` with `{ name, slot }` on slot tap
+- Name maxlength 12 (matches server validation)

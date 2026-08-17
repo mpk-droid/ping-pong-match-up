@@ -1,0 +1,35 @@
+---
+description: Server and OpenShift conventions
+globs: server.js,openshift/**/*
+alwaysApply: false
+---
+
+# Backend Conventions
+
+## server.js
+
+- Prepared statements in `stmts` object — add new queries there
+- `SLOTS` array is generated (09:00–17:30); validate against it
+- `ensureToday()` clears stale dates; do not reintroduce in-memory-only store
+- SSE: `clients` array, `broadcast()` sends full `loadSlots()` JSON
+- Custom SSE events: `notify` (notification text), `clear` (reset)
+- Rate limit on `/api/toggle` only (30 req/min)
+- Helmet CSP allows `'unsafe-inline'` for scripts/styles — required for inline frontend
+
+## Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `8080` | Listen port |
+| `DB_PATH` | `data/pingpong.db` | SQLite file path |
+| `SLACK_WEBHOOK_URL` | unset | Optional Slack notifications |
+| `DASHBOARD_URL` | openshift route | Dashboard link in Slack messages |
+| `OFFICE_TZ` | `America/New_York` | Slot past-check and daily date |
+
+## OpenShift
+
+- `Recreate` deployment strategy (PVC is RWO)
+- `app.set('trust proxy', 1)` — required behind ingress for rate limiter
+- Toggle logs: `toggle <name> <slot> add|remove` — use `oc logs` to debug Slack
+- Do not increase replicas without changing storage architecture
+- CronJob calls `POST /api/clear` for daily reset

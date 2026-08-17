@@ -162,6 +162,13 @@ app.get('/api/today', (_req, res) => {
 const MAX_NAMES_PER_SLOT = 20;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 
+function formatTime(slot) {
+  const [h, m] = slot.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
 function formatTimeShort(slot) {
   const [h, m] = slot.split(':').map(Number);
   const suffix = h >= 12 ? 'pm' : 'am';
@@ -178,42 +185,83 @@ function isPastSlot(slot) {
   return current >= slotEnd;
 }
 
-function slotLine(names, slot) {
-  const time = formatTimeShort(slot);
+function buildToggleMessage(names, slot) {
+  if (names.length === 0 || isPastSlot(slot)) return null;
+  const time = formatTime(slot);
   if (names.length === 1) {
-    return `${time}: ${names[0]}. (Looking for partner)`;
+    return `🏓 ${names[0]} is available at ${time}. Looking for a partner!`;
   }
-  return `${time}: ${names.join(', ')} (wanna join?)`;
+  if (names.length === 2) {
+    return `🏓 ${names[0]} and ${names[1]} are playing at ${time}. Wanna join?`;
+  }
+  return `🏓 ${names[0]}, ${names[1]} and more are playing at ${time}`;
 }
 
-function buildStatusMessage() {
+function buildSummaryBlock() {
   const allSlots = loadSlots();
   const lines = [];
   for (const slot of SLOTS) {
     if (isPastSlot(slot)) continue;
     const names = allSlots[slot] || [];
     if (names.length === 0) continue;
-    lines.push(slotLine(names, slot));
+    lines.push(`${formatTimeShort(slot)}: ${names.join(', ')}`);
   }
-  return lines.length > 0 ? lines.join('\n') : null;
+  const body = lines.length > 0 ? lines.join('\n') : 'empty slots';
+  return `\`\`\`\n${body}\n\`\`\``;
 }
 
-function notify() {
-  const text = buildStatusMessage();
-  if (!text) return;
+function postSlack(text) {
+  if (!SLACK_WEBHOOK_URL) return;
+  fetch(SLACK_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  }).catch(() => {});
+}
 
-  if (SLACK_WEBHOOK_URL) {
-    fetch(SLACK_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    }).catch(() => {});
-  }
-
+function postBrowserNotify(text) {
   const notifyData = JSON.stringify({ text });
   for (const c of clients) {
     c.write(`event: notify\ndata: ${notifyData}\n\n`);
   }
+}
+
+function notifyToggle(slot, names) {
+  const text = buildToggleMessage(names, slot);
+  if (!text) return;
+  postSlack(text);
+  postBrowserNotify(text);
+}
+
+function postSummary() {
+  ensureToday();
+  postSlack(buildSummaryBlock());
+}
+
+// 9am, 11am, 1pm, 3pm, 5pm, 6pm office time (every 2h from 9–5, plus 6pm)
+const SUMMARY_HOURS = [9, 11, 13, 15, 17, 18];
+
+function msUntilNextSummary() {
+  const { hour, minute } = officeTimeParts();
+  const currentMins = hour * 60 + minute;
+
+  for (const h of SUMMARY_HOURS) {
+    const targetMins = h * 60;
+    if (currentMins <= targetMins) {
+      return (targetMins - currentMins) * 60 * 1000;
+    }
+  }
+
+  const minsUntilMidnight = 24 * 60 - currentMins;
+  return (minsUntilMidnight + SUMMARY_HOURS[0] * 60) * 60 * 1000;
+}
+
+function scheduleSummary() {
+  const delay = msUntilNextSummary();
+  setTimeout(() => {
+    postSummary();
+    scheduleSummary();
+  }, delay);
 }
 
 app.post('/api/toggle', (req, res) => {
@@ -240,7 +288,8 @@ app.post('/api/toggle', (req, res) => {
     stmts.insert.run(today, slot, sanitized);
   }
 
-  notify();
+  const names = loadSlots()[slot] || [];
+  notifyToggle(slot, names);
   broadcast();
   res.json({ ok: true });
 });
@@ -272,6 +321,7 @@ app.post('/api/clear', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Ping pong board running on http://localhost:${PORT}`);
+  scheduleSummary();
 });
 
 process.on('SIGTERM', () => { db.close(); process.exit(0); });

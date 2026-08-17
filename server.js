@@ -142,7 +142,6 @@ app.get('/api/today', (_req, res) => {
 
 const MAX_NAMES_PER_SLOT = 20;
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
-const NOTIFY_DELAY = 60 * 1000;
 
 function formatTime(slot) {
   const [h, m] = slot.split(':').map(Number);
@@ -151,26 +150,12 @@ function formatTime(slot) {
   return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
-// --- Notification batching ---
-let notifyTimer = null;
-let slotsBefore = null;
-
-function buildNotifications(before, after) {
-  const messages = [];
-  for (const slot of SLOTS) {
-    const oldNames = (before[slot] || []).map(n => n.toLowerCase());
-    const newNames = after[slot] || [];
-    const countBefore = oldNames.length;
-    const countNow = newNames.length;
-    const added = countNow > countBefore;
-
-    if (added && countNow >= 1) {
-      messages.push(buildMessage(newNames, slot));
-    } else if (!added && countNow === 1) {
-      messages.push(buildMessage(newNames, slot));
-    }
-  }
-  return messages;
+function isPastSlot(slot) {
+  const now = new Date();
+  const [h, m] = slot.split(':').map(Number);
+  const slotEnd = h * 60 + m + 30;
+  const current = now.getHours() * 60 + now.getMinutes();
+  return current >= slotEnd;
 }
 
 function buildMessage(names, slot) {
@@ -185,33 +170,22 @@ function buildMessage(names, slot) {
   return `🏓 ${names[0]}, ${names[1]} and more are playing at ${time}`;
 }
 
-function flushNotifications() {
-  const after = loadSlots();
-  const messages = buildNotifications(slotsBefore, after);
+function notifySlot(slot, names) {
+  if (names.length === 0 || isPastSlot(slot)) return;
 
-  for (const text of messages) {
-    if (SLACK_WEBHOOK_URL) {
-      fetch(SLACK_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      }).catch(() => {});
-    }
+  const text = buildMessage(names, slot);
 
-    const notifyData = JSON.stringify({ text });
-    for (const c of clients) {
-      c.write(`event: notify\ndata: ${notifyData}\n\n`);
-    }
+  if (SLACK_WEBHOOK_URL) {
+    fetch(SLACK_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }).catch(() => {});
   }
 
-  notifyTimer = null;
-  slotsBefore = null;
-}
-
-function scheduleNotification() {
-  if (!notifyTimer) {
-    slotsBefore = loadSlots();
-    notifyTimer = setTimeout(flushNotifications, NOTIFY_DELAY);
+  const notifyData = JSON.stringify({ text });
+  for (const c of clients) {
+    c.write(`event: notify\ndata: ${notifyData}\n\n`);
   }
 }
 
@@ -239,7 +213,8 @@ app.post('/api/toggle', (req, res) => {
     stmts.insert.run(today, slot, sanitized);
   }
 
-  scheduleNotification();
+  const names = loadSlots()[slot] || [];
+  notifySlot(slot, names);
   broadcast();
   res.json({ ok: true });
 });

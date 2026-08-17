@@ -216,7 +216,7 @@ function buildSummaryBlock() {
 
 function postSlack(text) {
   if (!SLACK_WEBHOOK_URL) return;
-  const fullText = `${text}\n<${DASHBOARD_URL}|Dashboard>`;
+  const fullText = `${text}  <${DASHBOARD_URL}|Dashboard>`;
   fetch(SLACK_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

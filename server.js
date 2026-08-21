@@ -268,18 +268,10 @@ function postSlack(text) {
   }).catch(() => {});
 }
 
-function postBrowserNotify(text) {
-  const notifyData = JSON.stringify({ text });
-  for (const c of clients) {
-    c.write(`event: notify\ndata: ${notifyData}\n\n`);
-  }
-}
-
 function notifyToggle(slot, names, actor, removed) {
   const text = buildToggleMessage(names, slot, actor, removed);
   if (!text) return;
   postSlack(text);
-  postBrowserNotify(text);
 }
 
 // 9am, 11am, 1pm, 3pm, 5pm, 6pm office time (every 2h from 9–5, plus 6pm)

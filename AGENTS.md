@@ -39,7 +39,7 @@ openshift/cronjob.yaml     — Daily clear via POST /api/clear
 | POST | `/api/clear` | Clear all entries (CronJob) |
 | GET | `/api/events` | SSE stream for real-time updates |
 
-SSE event types: default `message` (slot state), `notify` (browser notification text), `clear` (daily reset).
+SSE event types: default `message` (slot state), `clear` (daily reset).
 
 ## Key Conventions
 

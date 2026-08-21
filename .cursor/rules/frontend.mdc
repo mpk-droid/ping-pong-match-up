@@ -16,7 +16,7 @@ alwaysApply: false
 
 - `myName` from `localStorage` (`pp-name`); `slots` from SSE + `/api/today` polling (5s)
 - `applySlots()` dedupes JSON before re-render; poll on load, interval, tab visible, SSE error
-- `EventSource('/api/events')` handles `message`, `notify`, and `clear` events
+- `EventSource('/api/events')` handles `message` and `clear` events
 - Past slots get `.past` class and are not clickable
 
 ## Slot Styling Classes

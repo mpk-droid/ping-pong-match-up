@@ -12,7 +12,7 @@ alwaysApply: false
 - `SLOTS` array is generated (09:00–17:30); validate against it
 - `ensureToday()` clears stale dates; do not reintroduce in-memory-only store
 - SSE: `clients` array, `broadcast()` sends full `loadSlots()` JSON
-- Custom SSE events: `notify` (notification text), `clear` (reset)
+- Custom SSE events: `clear` (daily reset)
 - Rate limit on `/api/toggle` only (30 req/min)
 - Helmet CSP allows `'unsafe-inline'` for scripts/styles — required for inline frontend
 

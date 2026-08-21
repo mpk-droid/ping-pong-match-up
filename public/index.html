@@ -108,10 +108,6 @@
     });
     renameBtn.addEventListener('click', showNamePrompt);
 
-    if ('Notification' in window && Notification.permission === 'default') {
-      document.addEventListener('click', () => Notification.requestPermission(), { once: true });
-    }
-
     function formatTime(slot) {
       const [h, m] = slot.split(':').map(Number);
       const suffix = h >= 12 ? 'PM' : 'AM';
@@ -255,11 +251,6 @@
     const evtSource = new EventSource('/api/events');
     evtSource.addEventListener('clear', (e) => {
       applySlots(JSON.parse(e.data));
-    });
-    evtSource.addEventListener('notify', (e) => {
-      if (Notification.permission !== 'granted') return;
-      const { text } = JSON.parse(e.data);
-      new Notification('\u{1F3D3} Ping Pong', { body: text });
     });
     evtSource.onmessage = (e) => {
       applySlots(JSON.parse(e.data));

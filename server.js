@@ -56,18 +56,23 @@ db.exec(`CREATE TABLE IF NOT EXISTS entries (
   date TEXT NOT NULL,
   slot TEXT NOT NULL,
   name TEXT NOT NULL,
+  joined_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (date, slot, name)
 )`);
+const entryCols = db.prepare('PRAGMA table_info(entries)').all();
+if (!entryCols.some((c) => c.name === 'joined_at')) {
+  db.exec('ALTER TABLE entries ADD COLUMN joined_at INTEGER NOT NULL DEFAULT 0');
+}
 db.exec(`CREATE TABLE IF NOT EXISTS users (
   name TEXT PRIMARY KEY,
   created TEXT NOT NULL
 )`);
 
 const stmts = {
-  insert: db.prepare('INSERT OR IGNORE INTO entries (date, slot, name) VALUES (?, ?, ?)'),
+  insert: db.prepare('INSERT OR IGNORE INTO entries (date, slot, name, joined_at) VALUES (?, ?, ?, ?)'),
   remove: db.prepare('DELETE FROM entries WHERE date = ? AND slot = ? AND LOWER(name) = LOWER(?)'),
   exists: db.prepare('SELECT 1 FROM entries WHERE date = ? AND slot = ? AND LOWER(name) = LOWER(?)'),
-  loadDay: db.prepare('SELECT slot, name FROM entries WHERE date = ?'),
+  loadDay: db.prepare('SELECT slot, name FROM entries WHERE date = ? ORDER BY joined_at'),
   clearOld: db.prepare('DELETE FROM entries WHERE date != ?'),
   clearAll: db.prepare('DELETE FROM entries'),
   findUser: db.prepare('SELECT 1 FROM users WHERE LOWER(name) = LOWER(?)'),
@@ -211,7 +216,9 @@ function formatNameList(names) {
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   if (names.length === 3) return `${names[0]}, ${names[1]} and ${names[2]}`;
-  return `${names[0]}, ${names[1]}, ${names[2]} and ${names[3]}`;
+  if (names.length === 4) return `${names[0]}, ${names[1]}, ${names[2]} and ${names[3]}`;
+  const last = names[names.length - 1];
+  return `${names.slice(0, -1).join(', ')} and ${last}`;
 }
 
 function buildToggleMessage(names, slot, actor, removed) {
@@ -235,10 +242,7 @@ function buildToggleMessage(names, slot, actor, removed) {
   if (count === 4) {
     return `Doubles match on! ${formatNameList(names)} are playing.`;
   }
-  const shown = names.includes(actor)
-    ? [actor, ...names.filter((n) => n !== actor)].slice(0, 4)
-    : names.slice(0, 4);
-  return `${formatNameList(shown)} and more people are playing at ${time}.`;
+  return `${formatNameList(names)} are playing at ${time}.`;
 }
 
 function buildSummaryBlock() {
@@ -341,7 +345,7 @@ app.post('/api/toggle', (req, res) => {
     if (currentSlot.length >= MAX_NAMES_PER_SLOT) {
       return res.status(409).json({ error: 'Slot is full' });
     }
-    stmts.insert.run(today, slot, sanitized);
+    stmts.insert.run(today, slot, sanitized, Date.now());
     console.log(`toggle ${sanitized} ${slot} add`);
   }
 

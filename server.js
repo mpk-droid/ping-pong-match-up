@@ -321,6 +321,7 @@ app.post('/api/toggle', (req, res) => {
 
   const sanitized = name.trim().slice(0, 12);
   if (!sanitized) return res.status(400).json({ error: 'Name is empty' });
+  if (isPastSlot(slot)) return res.status(400).json({ error: 'Slot is in the past' });
 
   ensureToday();
   stmts.registerUser.run(sanitized, todayStr());

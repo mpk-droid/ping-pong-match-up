@@ -209,6 +209,7 @@
 
     async function toggle(slot) {
       if (!myName) { showNamePrompt(); return; }
+      if (isPastSlot(slot)) return;
       try {
         const resp = await fetch('/api/toggle', {
           method: 'POST',
@@ -260,8 +261,12 @@
     };
 
     setInterval(pollSlots, POLL_MS);
+    setInterval(render, 30_000);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') pollSlots();
+      if (document.visibilityState === 'visible') {
+        pollSlots();
+        render();
+      }
     });
   </script>
 </body>

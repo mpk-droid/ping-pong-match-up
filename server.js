@@ -235,7 +235,10 @@ function buildToggleMessage(names, slot, actor, removed) {
   if (count === 4) {
     return `Doubles match on! ${formatNameList(names)} are playing.`;
   }
-  return `${formatNameList(names.slice(0, 4))} and more people are playing at ${time}.`;
+  const shown = names.includes(actor)
+    ? [actor, ...names.filter((n) => n !== actor)].slice(0, 4)
+    : names.slice(0, 4);
+  return `${formatNameList(shown)} and more people are playing at ${time}.`;
 }
 
 function buildSummaryBlock() {

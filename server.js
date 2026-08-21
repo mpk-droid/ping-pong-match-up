@@ -207,16 +207,35 @@ function isPastSlot(slot) {
   return current >= slotEnd;
 }
 
-function buildToggleMessage(names, slot) {
-  if (names.length === 0 || isPastSlot(slot)) return null;
+function formatNameList(names) {
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  if (names.length === 3) return `${names[0]}, ${names[1]} and ${names[2]}`;
+  return `${names[0]}, ${names[1]}, ${names[2]} and ${names[3]}`;
+}
+
+function buildToggleMessage(names, slot, actor, removed) {
+  if (isPastSlot(slot)) return null;
   const time = formatTime(slot);
-  if (names.length === 1) {
+  const count = names.length;
+
+  if (count === 0) {
+    if (!removed) return null;
+    return `${actor} is no longer available at ${time}. Slot empty.`;
+  }
+  if (count === 1) {
     return `${names[0]} is available at ${time}. Looking for a partner!`;
   }
-  if (names.length === 2) {
-    return `${names[0]} and ${names[1]} are playing at ${time}. Wanna join?`;
+  if (count === 2) {
+    return `Match found! ${names[0]} and ${names[1]} are playing at ${time}. Wanna join?`;
   }
-  return `${names[0]}, ${names[1]} and more are playing at ${time}`;
+  if (count === 3) {
+    return `${names[0]}, ${names[1]} and ${names[2]} are playing at ${time}, looking for another partner to play doubles!`;
+  }
+  if (count === 4) {
+    return `Doubles match on! ${formatNameList(names)} are playing.`;
+  }
+  return `${formatNameList(names.slice(0, 4))} and more people are playing at ${time}.`;
 }
 
 function buildSummaryBlock() {
@@ -249,8 +268,8 @@ function postBrowserNotify(text) {
   }
 }
 
-function notifyToggle(slot, names) {
-  const text = buildToggleMessage(names, slot);
+function notifyToggle(slot, names, actor, removed) {
+  const text = buildToggleMessage(names, slot, actor, removed);
   if (!text) return;
   postSlack(text);
   postBrowserNotify(text);
@@ -309,8 +328,10 @@ app.post('/api/toggle', (req, res) => {
 
   const today = todayStr();
   const exists = stmts.exists.get(today, slot, sanitized);
+  let removed = false;
   if (exists) {
     stmts.remove.run(today, slot, sanitized);
+    removed = true;
     console.log(`toggle ${sanitized} ${slot} remove`);
   } else {
     const currentSlot = loadSlots()[slot] || [];
@@ -322,7 +343,7 @@ app.post('/api/toggle', (req, res) => {
   }
 
   const names = loadSlots()[slot] || [];
-  notifyToggle(slot, names);
+  notifyToggle(slot, names, sanitized, removed);
   broadcast();
   res.json({ ok: true, slots: loadSlots() });
 });
